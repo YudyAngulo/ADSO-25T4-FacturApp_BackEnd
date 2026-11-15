@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
-from src.models import Base
+from src.models import Base, session
 
 
 class Products(Base):
@@ -22,3 +22,15 @@ class Products(Base):
 
     def __repr__(self):
         return f"<Product(id={self.id}, name='{self.name}', price={self.price}, stock={self.stock}, category_id={self.category_id}, active={self.active})>"
+
+    def get():
+        products = session.query(Products).all()
+        return products
+
+    def get_by_name(name):
+        product = session.query(Products).filter_by(name=name).first()
+        return product
+   
+    def save(self):
+        session.add(self)
+        session.commit()
