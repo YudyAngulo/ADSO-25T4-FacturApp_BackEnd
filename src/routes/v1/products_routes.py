@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request
 from src.models.products import Products
 from sqlalchemy import Float
+from src.utils.auth import token_required
 
 products_bp = Blueprint('products_v1', __name__, url_prefix="/api/v1")
 
 @products_bp.route('/products', methods=['GET'])
-def get_products():
+@token_required        
+def get_products(current_user):
     page = 1
     per_page = 3
     products, total_products = Products.get_paginated(page=page, per_page=per_page)
