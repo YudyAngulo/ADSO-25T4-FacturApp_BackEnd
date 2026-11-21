@@ -49,3 +49,18 @@ def token_required(f):
 
     return decorated
 
+def role_required(*allowed_roles):
+    def decorator(f):
+        @wraps(f)
+        def decorated(current_user, *args, **kwargs):
+            if current_user.role not in allowed_roles:
+                return jsonify({
+                    'success': False,
+                    'message': 'You do not have permission to access this resource!'
+                }), 403
+
+            return f(current_user, *args, **kwargs)
+
+        return decorated
+    return decorator
+
