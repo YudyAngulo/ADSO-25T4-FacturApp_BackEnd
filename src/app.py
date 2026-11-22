@@ -4,6 +4,7 @@ from src.models.categories import Categories
 from src.models.products import Products
 from src.models.clients import Clients
 from src.models.invoices import Invoices
+from src.models.invoice_details import InvoiceDetails
 
 from src.routes import register_routes
 
