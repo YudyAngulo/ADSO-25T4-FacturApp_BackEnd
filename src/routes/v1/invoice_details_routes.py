@@ -169,3 +169,159 @@ def get_invoice_details(current_user, invoice_id):
         'details': details_data,
         'invoice_total': invoice.total
     }), 200
+
+
+@invoice_details_bp.route(
+    '/invoices/<int:invoice_id>/details/<int:detail_id>',
+    methods=['PUT']
+)
+@token_required
+@role_required('ADMIN')
+def update_invoice_detail(current_user, invoice_id, detail_id):
+
+    # 1. Buscar la factura
+    invoice = Invoices.get_by_id(invoice_id)
+
+    if not invoice:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice not found'
+        }), 404
+
+    # 2. Buscar el detalle y verificar que pertenezca a la factura
+    detail = InvoiceDetails.get_by_id(detail_id)
+
+    if not detail or detail.invoice_id != invoice_id:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice detail not found'
+        }), 404
+
+    # 3. Verificar el estado de la factura
+    if invoice.active == 0:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice is cancelled and cannot be modified'
+        }), 409
+
+    if invoice.completed:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice is completed and cannot be modified'
+        }), 409
+
+    # 4. Validar la nueva cantidad
+    data = request.get_json(silent=True) or {}
+    quantity = data.get('quantity')
+
+    if quantity is None:
+        return jsonify({
+            'success': False,
+            'message': 'quantity is required'
+        }), 400
+
+    try:
+        quantity = float(quantity)
+    except (ValueError, TypeError):
+        return jsonify({
+            'success': False,
+            'message': 'quantity must be a number'
+        }), 400
+
+    if quantity <= 0:
+        return jsonify({
+            'success': False,
+            'message': 'quantity must be greater than 0'
+        }), 400
+
+    # 5. Calcular la diferencia
+    difference = quantity - detail.quantity
+
+    product = Products.get_by_id(detail.product_id)
+
+    # 6. Verificar el inventario si aumenta la cantidad
+    if difference > 0 and difference > product.stock:
+        return jsonify({
+            'success': False,
+            'message': f'not enough stock, available: {product.stock}'
+        }), 400
+
+    # 7. Actualizar inventario, cantidad y total
+    product.stock -= difference
+    invoice.total = round(
+        invoice.total + difference * detail.unit_price, 2
+    )
+    detail.quantity = quantity
+
+    # 8. Guardar los cambios
+    session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Invoice detail updated successfully',
+        'detail': invoice_detail_to_dict(detail),
+        'invoice_total': invoice.total,
+        'product_stock': product.stock
+    }), 200
+
+
+@invoice_details_bp.route(
+    '/invoices/<int:invoice_id>/details/<int:detail_id>',
+    methods=['DELETE']
+)
+@token_required
+@role_required('ADMIN')
+def delete_invoice_detail(current_user, invoice_id, detail_id):
+
+    # 1. Buscar la factura
+    invoice = Invoices.get_by_id(invoice_id)
+
+    if not invoice:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice not found'
+        }), 404
+
+    # 2. Buscar el detalle
+    detail = InvoiceDetails.get_by_id(detail_id)
+
+    if not detail or detail.invoice_id != invoice_id:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice detail not found'
+        }), 404
+
+    # 3. Verificar el estado de la factura
+    if invoice.active == 0:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice is cancelled and cannot be modified'
+        }), 409
+
+    if invoice.completed:
+        return jsonify({
+            'success': False,
+            'message': 'Invoice is completed and cannot be modified'
+        }), 409
+
+    # 4. Buscar el producto
+    product = Products.get_by_id(detail.product_id)
+
+    # 5. Devolver las unidades al inventario
+    product.stock += detail.quantity
+
+    # 6. Actualizar el total de la factura
+    invoice.total = round(
+        invoice.total - detail.quantity * detail.unit_price, 2
+    )
+
+    # 7. Eliminar el detalle
+    session.delete(detail)
+    session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Product removed from invoice successfully',
+        'invoice_total': invoice.total,
+        'product_stock': product.stock
+    }), 200

@@ -38,3 +38,7 @@ class InvoiceDetails(Base):
 
     def update(self):
         session.commit()
+
+    def delete(self):
+        session.delete(self)
+        session.commit()
